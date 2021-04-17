@@ -1,0 +1,297 @@
+// Tema2_crypto_cuNTL.cpp : This file contains the 'main' function. Program execution begins and ends there.
+//
+
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <iostream>
+
+#include <NTL/ZZ.h>
+#include <NTL/vector.h>
+
+using namespace std;
+using namespace NTL;
+
+void afisareVector(Vec<ZZ> v)
+{
+    int i;
+    for (i = 0; i < v.length()-1; i++)
+    {
+        cout << v.get(i);
+    }
+}
+
+void testare(Vec<ZZ> v)
+{
+    int i, nr0=0, nr1=0;
+    ZZ elem;
+    for (i = 0; i < v.length()-1; i++)
+    {
+        elem = v.get(i);
+        if (elem == 1) {
+nr1++;
+        }
+        else {
+        nr0++;
+        }
+    }
+    cout << "\nBiti de 0 : " << nr0 << endl;
+    cout << "\nBiti de 1 : " << nr1 << endl;
+
+}
+
+void BBS(int nr_pasi)
+{
+    ZZ p, q, n;
+    p = GenPrime_ZZ(512);        //generez p si q doua numere prime mari
+    q = GenPrime_ZZ(512);
+    cout << "p=" << p << endl;
+    cout << "q=" << q << endl;
+
+    n = p * q;                  //n este p*q
+    cout << "n=" << n;
+
+    ZZ seed, d;
+    seed = RandomBnd(1024);     //caut un seed mai mic decat n
+    d = GCD(seed, n);
+    while (d != 1)
+    {
+        seed = RandomBnd(1024);
+        while (seed >= n) {
+            seed = RandomBnd(1024);
+        }
+
+        d = GCD(seed, n);       //a.i. cmmdc-ul lor sa fie 1
+    }
+
+    
+    Vec<ZZ> bit;                 //in acest vector voi pune bitii pentru testare
+    int i = 0;
+    bit.SetLength(i + 1);
+
+    ZZ paritate, old, young;
+
+    paritate = seed % 2;        //adaug paritatea seed-ului
+    bit.put(i, paritate);
+    i++;
+    bit.SetLength(i + 1);
+
+    cout << i << ": " << seed << endl;
+
+    old = seed;
+    while (i < nr_pasi)                 //calculez cei nr_pasi-1 biti
+    {
+        ZZ aux;
+        aux = n - old;                  //daca cumva old%n < old, atunci vom folosi numarul mai mic la calcule
+        if (old > aux) {
+            old = aux;
+        }
+
+        young = (old * old) % n;        //calculam old^2 mod n
+
+        paritate = young % 2;
+        bit.put(i, paritate);          //paritatea noului numar aflat
+
+        cout << i + 1 << ": " << young << endl;
+
+        old = young;                  //el devine viitorul seed, old si adaug in vector
+        i++;
+        bit.SetLength(i + 1);
+
+    }
+    afisareVector(bit);               //afisare si testare
+    testare(bit);
+
+}
+
+/*          aceasta metoda o foloseam pentru a vedea daca un numar este prim sau compus, dar se bloca pentru numerele din ZZ
+int isComposite(ZZ n)                 
+{
+    ZZ i;
+    for (i = 2; i * i <= n; i++) {
+        if (divide(i,n) == 1) {
+            return 1;
+        }
+    }
+    return 0;
+}
+*/
+
+//metoda de baza de aflare a simbolului
+int JacobiRecursiv(ZZ n, ZZ a)
+{
+    ZZ m;
+    m = (n+a) % n;       //proprietatea 1
+    
+    if (n == 1) {        //def pag 24 FAI
+        return 1;
+    }
+    else if (m == 1) {  //proprietatea 3
+        return 1;
+    }
+    else if (m == n-1) {  //proprietatea 4
+        if (n % 4 == 1) {
+            return 1;
+        }
+        else if (n % 4 == 3) {
+            return -1;
+        }
+    }
+    else if (m == 2) {            //proprietatea 5
+        if (n % 8 == 1 || n % 8 == 7) {
+            return 1;
+        }
+        else if (n % 8 == 3 || n % 8 == 5) {
+            return -1;
+        }
+    }
+    else if ((n % 4 == 1 && m % 4 != 1) || (n % 4 != 1 && m % 4 == 1)) {    //proprietatea 6.1
+        return JacobiRecursiv(m, n);
+    }
+    else if (n % 4 == 3 && m % 4 == 3) {         //proprietatea 6.2
+        return JacobiRecursiv(n, -m);
+    }
+    else {
+        //int w = isComposite(n);
+        ZZ w;
+        MillerWitness(n, w);          //daca n este compus atunci il desfac in factori primi , def pag2 FAI
+        if (w == 1) {
+
+            //factorizarea in factori primi a lui n//
+
+            ZZ i, aux;
+            aux = n;
+            i = 2;
+            long pow = 0;
+            int fin = 1;
+
+            while (i * i <= aux) {     //factori primi la o putere pow
+                int ok = 0;
+                while (divide(i,aux)==1) {
+                    ok = 1;
+                    aux = aux / i;
+                    pow++;
+                }
+                if (ok == 1) {
+                    int val;
+                    val = JacobiRecursiv(i, m);
+                    if (pow % 2 == 0) val = abs(val);
+                    fin = fin * val;
+                }
+                i = i+1;
+
+            }
+            return fin;
+        }
+        else if (w == 0) {              //daca n este prim, atunci descompunem pe m in factori primi -----proprietatea 2
+            //int q = isComposite(m);
+            ZZ q;
+            MillerWitness(m, q);       //daca este compus il desfacem
+            if (q == 1) {
+
+                //factorizez pe m in factori primi
+                ZZ i;
+                i = 2;
+                int fin = 1;
+
+                while (m >= 1) {
+                    while (divide(i, m) == 1) {
+                        fin = fin * JacobiRecursiv(n, i);
+                        m = m / i;
+                    }
+                    i = i+1;
+                }
+                return fin;
+
+            }
+            else {                    //acest else este de back-up in cazul in care imi arata ca ambele numere sunt prime, pentru ca functia de MillerWitness e pe o probabilitate sa fie adevarat
+               return Jacobi(m,n);
+            }
+        }
+        
+    }
+   
+}
+
+void afisareJacobiVector(int bit[1024], int n) {
+    for (int i = 0; i < n; i++) {
+        cout << bit[i];
+    }
+}
+
+void numarareBiti(int biti[1024], int n) {
+    int bit1 = 0;
+    int bit0 = 0;
+    for (int i = 0; i < n; i++) {
+        if (biti[i] == 0) {
+            bit0++;
+        }
+        else {
+            bit1++;
+        }
+    }
+
+    cout << "\nBITI DE 0 = " << bit0 << endl;
+    cout << "BITI DE 1 = " << bit1 << endl;
+
+}
+
+void computeJacobi(int nr_pasi)
+{
+    ZZ n, p, q, seed;
+    p = GenPrime_ZZ(512);  //generez p si q prime mari
+    q = GenPrime_ZZ(512);
+    n = p * q;              // n e p*q
+
+    cout << "p=" << p << endl;
+    cout << "q=" << q << endl;
+    cout << "n=" << n << endl;
+
+    ZZ d;
+    seed = RandomBnd(1024);     //aleg un seed mai mic ca n,  primi intre ei
+    d = GCD(seed, n);
+    while (d != 1)
+    {
+        seed = RandomBnd(1024);
+        while (seed >= n) {
+            seed = RandomBnd(1024);
+        }
+
+        d = GCD(seed, n);
+    }
+    
+    int bit[1024];
+    int i=0, rez;
+
+    while (i < nr_pasi) {          //calculez simbolul de nr_pasi-1
+        cout << "seed" <<i<<" "<< seed+i << endl;
+        rez = JacobiRecursiv(n, seed + i);
+        if (rez == -1) {
+            bit[i] = 0;           //daca e -1, vom pune ca fiind bit 0, altfel e 1
+        }
+        else {
+            bit[i] = 1;
+        }
+        i++;
+    }
+    afisareJacobiVector(bit, i);    //afisare si testare
+    numarareBiti(bit, i);
+
+}
+
+
+
+int main()
+{
+    int nr_pasi;
+
+    cout << "BLUM-BLUM-SHRUM\n";
+    cout << "\nDati numarul de numere de afisare:\n";
+    cin >> nr_pasi;
+    BBS(nr_pasi);
+
+
+    cout << "\nJACOBI\n";
+    cout << "\nDati numarul de numere de afisare:\n";
+    cin >> nr_pasi;
+    computeJacobi(nr_pasi);
+}
